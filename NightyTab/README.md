@@ -30,7 +30,7 @@ For a fork, replace `xMimiez/Snow-Plugins` and `main` with your GitHub username,
 
 Inside the Nighty page, pull down from the top to reload. Pinch zoom and horizontal page movement are disabled so the embedded page stays fixed in place.
 
-After you sign in, Nighty Tab saves Nighty's access token on your device for the configured host. The plugin restores the cookie when you reopen the tab. Nighty handles your username and password. The server may ask you to sign in after it expires or revokes the token.
+After you sign in, Nighty Tab saves Nighty's access token on your device for the configured host. The plugin restores the cookie after you close the tab or restart Discord. Nighty handles your username and password. The server may ask you to sign in after it expires or revokes the token.
 
 ## Updating
 
