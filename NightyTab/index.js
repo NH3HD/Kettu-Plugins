@@ -873,7 +873,8 @@ var plugin = (() => {
       return `(() => { try { var saved = ${saved}; var persist = function (value) { if (typeof value !== 'string' || !value) return; var secure = location.protocol === 'https:' ? '; Secure' : ''; document.cookie = 'access_token=' + value + '; Path=/; Max-Age=2592000; SameSite=Lax' + secure; try { localStorage.setItem('access_token', value); } catch (e) {} }; if (saved) persist(saved); if (window.__mimeNightySession) return true; window.__mimeNightySession = true; var lastSent = ''; var send = function (value) { if (typeof value !== 'string' || !value || value === lastSent || !window.ReactNativeWebView) return; lastSent = value; window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'NIGHTY_TOKEN', token: value })); }; var readCookie = function () { try { var parts = document.cookie.split(';'); for (var i = 0; i < parts.length; i++) { var part = parts[i].trim(); if (part.indexOf('access_token=') === 0) return decodeURIComponent(part.slice(13)); } } catch (e) {} return ''; }; var publish = function () { var value = readCookie(); if (!value) { try { value = localStorage.getItem('access_token') || ''; } catch (e) {} } if (value && value !== lastSent) { persist(value); send(value); } }; publish(); var orig = window.fetch; if (typeof orig === 'function') { window.fetch = function () { var args = arguments; return Promise.resolve(orig.apply(this, args)).then(function (res) { try { var first = args[0]; var url = typeof first === 'string' ? first : (first && first.url) || ''; if (String(url).indexOf('/api/login') !== -1 && res && res.clone) res.clone().json().then(function (data) { if (data && typeof data.access_token === 'string') { persist(data.access_token); send(data.access_token); } }).catch(function () {}); } catch (e) {} return res; }); }; } document.addEventListener('visibilitychange', publish); window.addEventListener('pageshow', publish); window.addEventListener('focus', publish); window.setInterval(publish, 1000); } catch (e) {} return true; })();`;
     }
     function pageScript(token) {
-      return `${sessionScript(token)}(() => { try { var apply = function () { var meta = document.querySelector('meta[name="viewport"]'); if (!meta) { meta = document.createElement('meta'); meta.name = 'viewport'; document.head.appendChild(meta); } meta.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'; var style = document.getElementById('mime-nighty-mobile-fit'); if (!style) { style = document.createElement('style'); style.id = 'mime-nighty-mobile-fit'; style.textContent = 'html,body,#root,#app{width:100%!important;max-width:100vw!important;margin-left:0!important;margin-right:0!important;overflow-x:hidden!important}*,*:before,*:after{box-sizing:border-box}'; document.head.appendChild(style); } document.documentElement.style.touchAction = 'pan-y'; if (document.body) { document.body.style.touchAction = 'pan-y'; document.body.style.marginBottom = '0'; } }; apply(); document.addEventListener('DOMContentLoaded', apply, { once: true }); } catch (e) {} return true; })();`;
+      const saved = JSON.stringify(cleanToken(token) || "");
+      return `${sessionScript(token)}(() => { try { var saved = ${saved}; var apply = function () { var meta = document.querySelector('meta[name="viewport"]'); if (!meta) { meta = document.createElement('meta'); meta.name = 'viewport'; document.head.appendChild(meta); } meta.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'; var style = document.getElementById('mime-nighty-mobile-fit'); if (!style) { style = document.createElement('style'); style.id = 'mime-nighty-mobile-fit'; style.textContent = 'html,body,#root,#app{width:100%!important;max-width:100vw!important;margin-left:0!important;margin-right:0!important;overflow-x:hidden!important}*,*:before,*:after{box-sizing:border-box}'; document.head.appendChild(style); } document.documentElement.style.touchAction = 'pan-y'; if (document.body) { document.body.style.touchAction = 'pan-y'; document.body.style.marginBottom = '0'; } }; var restore = function () { if (!saved) return; var key = 'mime-nighty-restored'; var login = document.querySelector('input[type="password"]'); try { if (!login) { if (document.readyState !== 'loading') sessionStorage.removeItem(key); return; } var marker = saved.slice(-24); if (sessionStorage.getItem(key) === marker) return; sessionStorage.setItem(key, marker); location.reload(); } catch (e) {} }; apply(); restore(); document.addEventListener('DOMContentLoaded', function () { apply(); restore(); }, { once: true }); } catch (e) {} return true; })();`;
     }
     function onSessionMessage(event) {
       if (!r.active) return;
@@ -911,6 +912,7 @@ var plugin = (() => {
       const src = pageUrl(store.url);
       const WebView = r.find("WebView")?.WebView || r.byName("WebView");
       const webViewRef = React.useRef(null);
+      const savedSession = sessionToken();
       const [error, setError] = React.useState("");
       const frame = { flex: 1, width: "100%", backgroundColor: "#080D1B", overflow: "hidden" };
       const allow = (req) => {
@@ -921,9 +923,9 @@ var plugin = (() => {
         RN.View,
         { style: frame },
         !src ? h(Text, null, "Set a valid HTTP or HTTPS URL in Nighty Tab settings.") : !WebView ? h(Text, null, "WebView is unavailable in this Snow build.") : h(WebView, {
-          key: src,
+          key: `${src}:${savedSession ? "signed-in" : "signed-out"}`,
           ref: webViewRef,
-          source: { uri: src, ...sessionToken() ? { headers: { Cookie: `access_token=${sessionToken()}` } } : {} },
+          source: { uri: src, ...savedSession ? { headers: { Cookie: `access_token=${savedSession}` } } : {} },
           style: { flex: 1, width: "100%", backgroundColor: "#080D1B" },
           containerStyle: { flex: 1, backgroundColor: "#080D1B" },
           originWhitelist: ["http://*", "https://*"],
@@ -934,8 +936,8 @@ var plugin = (() => {
           thirdPartyCookiesEnabled: true,
           incognito: false,
           startInLoadingState: true,
-          injectedJavaScriptBeforeContentLoaded: pageScript(sessionToken()),
-          injectedJavaScript: pageScript(sessionToken()),
+          injectedJavaScriptBeforeContentLoaded: pageScript(savedSession),
+          injectedJavaScript: pageScript(savedSession),
           pullToRefreshEnabled: true,
           bounces: true,
           directionalLockEnabled: true,
@@ -1006,7 +1008,8 @@ var plugin = (() => {
         card(h(RN.View, { style: { padding: 14 } },
           field({ value: store.url, placeholder: "https://nighty.example", onChange: (value) => r.set("url", value), keyboardType: "url" }),
           store.url && !pageUrl(store.url) ? h(RN.Text, { style: { color: colors.danger, fontSize: 13, lineHeight: 18, marginTop: 8 } }, "Use an HTTP or HTTPS address without a username or password.") : null,
-          h(RN.Pressable || RN.TouchableOpacity, { accessibilityRole: "button", onPress: () => { if (!openNighty()) openSheet(); }, style: ({ pressed } = {}) => ({ height: 48, borderRadius: 12, backgroundColor: pressed ? "#4752C4" : colors.accent, alignItems: "center", justifyContent: "center", marginTop: 12 }) }, h(RN.Text, { style: { color: "#FFFFFF", fontSize: 16, lineHeight: 20, fontWeight: "700" } }, "Open Nighty"))
+          h(RN.Pressable || RN.TouchableOpacity, { accessibilityRole: "button", onPress: () => { if (!openNighty()) openSheet(); }, style: ({ pressed } = {}) => ({ height: 48, borderRadius: 12, backgroundColor: pressed ? "#4752C4" : colors.accent, alignItems: "center", justifyContent: "center", marginTop: 12 }) }, h(RN.Text, { style: { color: "#FFFFFF", fontSize: 16, lineHeight: 20, fontWeight: "700" } }, "Open Nighty")),
+          h(RN.Text, { style: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 8 } }, sessionToken() ? "Login saved for this address." : "Sign in once to save your login.")
         )),
         h(RN.View, { style: { height: 22 } }),
         sectionLabel("Behavior"),
@@ -1319,6 +1322,6 @@ var plugin = (() => {
   NightyTab.defaults = { url: "", scriptUtils: false, nightyPrefix: ".", iconType: "white", customIconUrl: "", showNightyButton: true, sessionHost: "", sessionToken: "", sessions: {} };
 
   // NightyTab.entry.js
-  var NightyTab_entry_default = register({ "id": "mime.nightytab", "name": "Nighty Tab", "description": "Open Nighty from Discord mobile settings or the profile action bar.", "version": "1.14.0", "authors": [{ "name": "Mime | N0_.q3", "id": "957164619061932045" }, { "name": "rico | wkcp", "id": "1361736124858630274" }], "license": "GPL-3.0-or-later", "source": "https://github.com/xMimiez/Snow-Plugins/tree/main/NightyTab" }, NightyTab);
+  var NightyTab_entry_default = register({ "id": "mime.nightytab", "name": "Nighty Tab", "description": "Open Nighty from Discord mobile settings or the profile action bar.", "version": "1.14.1", "authors": [{ "name": "Mime | N0_.q3", "id": "957164619061932045" }, { "name": "rico | wkcp", "id": "1361736124858630274" }], "license": "GPL-3.0-or-later", "source": "https://github.com/xMimiez/Snow-Plugins/tree/main/NightyTab" }, NightyTab);
   return __toCommonJS(NightyTab_entry_exports);
 })();
