@@ -862,8 +862,11 @@ var plugin = (() => {
     }
     function sessionToken() {
       const host = pageHost();
-      const saved = store.sessions?.[host];
-      return host && cleanToken(saved) ? cleanToken(saved) : "";
+      if (!host) return "";
+      const active = cleanToken(store.sessionToken);
+      if (store.sessionHost === host && active) return active;
+      const legacy = cleanToken(store.sessions?.[host]);
+      return legacy || "";
     }
     function sessionScript(token) {
       const saved = JSON.stringify(cleanToken(token) || "");
@@ -886,8 +889,12 @@ var plugin = (() => {
       const token = cleanToken(data.token);
       if (!token) return;
       const current = store.sessions && typeof store.sessions === "object" ? store.sessions : {};
-      if (current[host] === token) return;
-      r.set("sessions", { ...current, [host]: token });
+      if (store.sessionHost === host && cleanToken(store.sessionToken) === token && current[host] === token) return;
+      store.sessionHost = host;
+      store.sessionToken = token;
+      store.sessions = { ...current, [host]: token };
+      r.changed();
+      Promise.resolve(r.api.storage.flush()).catch((error) => r.error("Save Nighty login", error));
     }
     function readInset(edge) {
       try {
@@ -903,6 +910,7 @@ var plugin = (() => {
       r.useRefresh();
       const src = pageUrl(store.url);
       const WebView = r.find("WebView")?.WebView || r.byName("WebView");
+      const webViewRef = React.useRef(null);
       const [error, setError] = React.useState("");
       const frame = { flex: 1, width: "100%", backgroundColor: "#080D1B", overflow: "hidden" };
       const allow = (req) => {
@@ -914,6 +922,7 @@ var plugin = (() => {
         { style: frame },
         !src ? h(Text, null, "Set a valid HTTP or HTTPS URL in Nighty Tab settings.") : !WebView ? h(Text, null, "WebView is unavailable in this Snow build.") : h(WebView, {
           key: src,
+          ref: webViewRef,
           source: { uri: src, ...sessionToken() ? { headers: { Cookie: `access_token=${sessionToken()}` } } : {} },
           style: { flex: 1, width: "100%", backgroundColor: "#080D1B" },
           containerStyle: { flex: 1, backgroundColor: "#080D1B" },
@@ -944,7 +953,8 @@ var plugin = (() => {
           onShouldStartLoadWithRequest: allow,
           onError: (event) => setError(event.nativeEvent?.description || "Could not load Nighty."),
           onHttpError: (event) => setError(`Nighty returned HTTP ${event.nativeEvent?.statusCode}.`),
-          onLoad: () => setError("")
+          onLoad: () => setError(""),
+          onLoadEnd: () => webViewRef.current?.injectJavaScript?.(pageScript(sessionToken()))
         }),
         error ? h(Text, null, error) : null
       );
@@ -1152,7 +1162,8 @@ var plugin = (() => {
     }
     function repairNightyControl(element) {
       if (!isIconControl(element)) return element;
-      const isNighty = /(?:^|\s)Nighty(?:\s|$)|mime-nighty-profile-button/i.test(nodeText(element)) || treeContainsNightyLabel(element.props?.children);
+      const marker = [element.props?.testID, element.props?.nativeID, element.props?.id, element.props?.accessibilityHint].filter(Boolean).join(" ");
+      const isNighty = /mime-nighty-profile-button|Open Nighty/i.test(marker);
       if (!isNighty) return element;
       const state = { icon: false, changed: false };
       const props = {};
@@ -1305,9 +1316,9 @@ var plugin = (() => {
       r.status.profileButton = patched === false ? "unavailable" : r.status.profileButton === "replaced" ? "replaced" : "patched";
     } };
   }
-  NightyTab.defaults = { url: "", scriptUtils: false, nightyPrefix: ".", iconType: "white", customIconUrl: "", showNightyButton: true, sessions: {} };
+  NightyTab.defaults = { url: "", scriptUtils: false, nightyPrefix: ".", iconType: "white", customIconUrl: "", showNightyButton: true, sessionHost: "", sessionToken: "", sessions: {} };
 
   // NightyTab.entry.js
-  var NightyTab_entry_default = register({ "id": "mime.nightytab", "name": "Nighty Tab", "description": "Open Nighty from Discord mobile settings or the profile action bar.", "version": "1.13.1", "authors": [{ "name": "Mime | N0_.q3", "id": "957164619061932045" }, { "name": "rico | wkcp", "id": "1361736124858630274" }], "license": "GPL-3.0-or-later", "source": "https://github.com/xMimiez/Snow-Plugins/tree/main/NightyTab" }, NightyTab);
+  var NightyTab_entry_default = register({ "id": "mime.nightytab", "name": "Nighty Tab", "description": "Open Nighty from Discord mobile settings or the profile action bar.", "version": "1.14.0", "authors": [{ "name": "Mime | N0_.q3", "id": "957164619061932045" }, { "name": "rico | wkcp", "id": "1361736124858630274" }], "license": "GPL-3.0-or-later", "source": "https://github.com/xMimiez/Snow-Plugins/tree/main/NightyTab" }, NightyTab);
   return __toCommonJS(NightyTab_entry_exports);
 })();
