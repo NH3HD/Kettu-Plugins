@@ -2,7 +2,7 @@
   "spec": 3,
   "type": "plugin",
   "id": "mime.nightytab",
-  "version": "1.14.1",
+  "version": "2.0.0",
   "display": {
     "name": "Nighty Tab",
     "description": "Open Nighty from Discord mobile settings or the profile action bar.",

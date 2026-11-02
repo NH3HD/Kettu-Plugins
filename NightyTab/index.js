@@ -907,6 +907,16 @@ var plugin = (() => {
       }
       return 0;
     }
+    function loginScript() {
+      if (!store.autoLogin) return "";
+      const username = String(store.loginUsername || "").trim();
+      const password = String(store.loginPassword || "");
+      if (!username || !password || username.length > 256 || password.length > 256) return "";
+      const user = JSON.stringify(username);
+      const pass = JSON.stringify(password);
+      const stamp = JSON.stringify(`${username}\n${password}`);
+      return `(() => { try { var stamp = ${stamp}; if (window.__mimeNightyLoginStamp === stamp) return true; window.__mimeNightyLoginStamp = stamp; if (window.__mimeNightyLoginTimer) clearInterval(window.__mimeNightyLoginTimer); var user = ${user}; var pass = ${pass}; var setValue = function (input, value) { var proto = input && input.tagName === "TEXTAREA" ? window.HTMLTextAreaElement : window.HTMLInputElement; var desc = proto && Object.getOwnPropertyDescriptor(proto.prototype, "value"); if (desc && desc.set) desc.set.call(input, value); else input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true })); }; var tries = 0; window.__mimeNightyLoginTimer = setInterval(function () { tries++; try { var usernameInput = document.querySelector('input[name="Username"]'); var passwordInput = document.querySelector('input[name="Password"]'); if (!usernameInput || !passwordInput) { if (tries > 30) { clearInterval(window.__mimeNightyLoginTimer); window.__mimeNightyLoginStamp = ""; } return; } clearInterval(window.__mimeNightyLoginTimer); setValue(usernameInput, user); setValue(passwordInput, pass); var button = usernameInput.form && usernameInput.form.querySelector('button[type="submit"]') || document.querySelector('button[type="submit"]'); if (button) button.click(); else if (usernameInput.form && usernameInput.form.requestSubmit) usernameInput.form.requestSubmit(); else if (usernameInput.form) usernameInput.form.submit(); } catch (e) { clearInterval(window.__mimeNightyLoginTimer); } }, 500); } catch (e) {} return true; })();`;
+    }
     function NightyPage() {
       r.useRefresh();
       const src = pageUrl(store.url);
@@ -923,7 +933,7 @@ var plugin = (() => {
         RN.View,
         { style: frame },
         !src ? h(Text, null, "Set a valid HTTP or HTTPS URL in Nighty Tab settings.") : !WebView ? h(Text, null, "WebView is unavailable in this Snow build.") : h(WebView, {
-          key: `${src}:${savedSession ? "signed-in" : "signed-out"}`,
+          key: `${src}:${savedSession ? "signed-in" : "signed-out"}:${store.autoLogin && store.loginUsername && store.loginPassword ? "auto" : "manual"}`,
           ref: webViewRef,
           source: { uri: src, ...savedSession ? { headers: { Cookie: `access_token=${savedSession}` } } : {} },
           style: { flex: 1, width: "100%", backgroundColor: "#080D1B" },
@@ -937,7 +947,7 @@ var plugin = (() => {
           incognito: false,
           startInLoadingState: true,
           injectedJavaScriptBeforeContentLoaded: pageScript(savedSession),
-          injectedJavaScript: pageScript(savedSession),
+          injectedJavaScript: pageScript(savedSession) + loginScript(),
           pullToRefreshEnabled: true,
           bounces: true,
           directionalLockEnabled: true,
@@ -956,7 +966,7 @@ var plugin = (() => {
           onError: (event) => setError(event.nativeEvent?.description || "Could not load Nighty."),
           onHttpError: (event) => setError(`Nighty returned HTTP ${event.nativeEvent?.statusCode}.`),
           onLoad: () => setError(""),
-          onLoadEnd: () => webViewRef.current?.injectJavaScript?.(pageScript(sessionToken()))
+          onLoadEnd: () => webViewRef.current?.injectJavaScript?.(pageScript(sessionToken()) + loginScript())
         }),
         error ? h(Text, null, error) : null
       );
@@ -967,7 +977,7 @@ var plugin = (() => {
       const sectionLabel = (label) => h(RN.Text, { style: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: "600", marginLeft: 4, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 } }, label);
       const card = (...children) => h(RN.View, { style: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, overflow: "hidden" } }, ...children);
       const divider = () => h(RN.View, { style: { height: 1, backgroundColor: colors.border, marginLeft: 16 } });
-      const field = ({ value, onChange, placeholder, maxLength, keyboardType }) => h(RN.TextInput, {
+      const field = ({ value, onChange, placeholder, maxLength, keyboardType, secure }) => h(RN.TextInput, {
         value,
         onChangeText: onChange,
         placeholder,
@@ -976,6 +986,7 @@ var plugin = (() => {
         autoCorrect: false,
         maxLength,
         keyboardType,
+        secureTextEntry: !!secure,
         selectionColor: colors.accent,
         style: { minHeight: 50, color: colors.text, fontSize: 16, lineHeight: 21, backgroundColor: "#151619", borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 12 }
       });
@@ -1014,6 +1025,16 @@ var plugin = (() => {
         h(RN.View, { style: { height: 22 } }),
         sectionLabel("Behavior"),
         card(switchRow("showNightyButton", "Profile shortcut", "Add Nighty beside Settings on your profile."), divider(), switchRow("scriptUtils", "Script utilities", "Add Download Script to attachment menus.")),
+        h(RN.View, { style: { height: 22 } }),
+        sectionLabel("Auto login"),
+        card(
+          switchRow("autoLogin", "Auto login", "Fill the Nighty Username and Password fields when the page opens. Saved only in this plugin on your device."),
+          divider(),
+          h(RN.View, { style: { padding: 14, gap: 10 } },
+            field({ value: store.loginUsername, placeholder: "Username", onChange: (value) => r.set("loginUsername", value), maxLength: 256 }),
+            field({ value: store.loginPassword, placeholder: "Password", secure: true, onChange: (value) => r.set("loginPassword", value), maxLength: 256 })
+          )
+        ),
         h(RN.View, { style: { height: 22 } }),
         sectionLabel("Command prefix"),
         card(h(RN.View, { style: { padding: 14 } }, field({ value: store.nightyPrefix, placeholder: ".", maxLength: 1, onChange: (value) => r.set("nightyPrefix", value) }), h(RN.Text, { style: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 8 } }, "Nighty reads this character before script commands."))),
@@ -1319,9 +1340,9 @@ var plugin = (() => {
       r.status.profileButton = patched === false ? "unavailable" : r.status.profileButton === "replaced" ? "replaced" : "patched";
     } };
   }
-  NightyTab.defaults = { url: "", scriptUtils: false, nightyPrefix: ".", iconType: "white", customIconUrl: "", showNightyButton: true, sessionHost: "", sessionToken: "", sessions: {} };
+  NightyTab.defaults = { url: "", scriptUtils: false, nightyPrefix: ".", iconType: "white", customIconUrl: "", showNightyButton: true, autoLogin: false, loginUsername: "", loginPassword: "", sessionHost: "", sessionToken: "", sessions: {} };
 
   // NightyTab.entry.js
-  var NightyTab_entry_default = register({ "id": "mime.nightytab", "name": "Nighty Tab", "description": "Open Nighty from Discord mobile settings or the profile action bar.", "version": "1.14.1", "authors": [{ "name": "Mime | N0_.q3", "id": "957164619061932045" }, { "name": "rico | wkcp", "id": "1361736124858630274" }], "license": "GPL-3.0-or-later", "source": "https://github.com/xMimiez/Snow-Plugins/tree/main/NightyTab" }, NightyTab);
+  var NightyTab_entry_default = register({ "id": "mime.nightytab", "name": "Nighty Tab", "description": "Open Nighty from Discord mobile settings or the profile action bar.", "version": "2.0.0", "authors": [{ "name": "Mime | N0_.q3", "id": "957164619061932045" }, { "name": "rico | wkcp", "id": "1361736124858630274" }], "license": "GPL-3.0-or-later", "source": "https://github.com/xMimiez/Snow-Plugins/tree/main/NightyTab" }, NightyTab);
   return __toCommonJS(NightyTab_entry_exports);
 })();
