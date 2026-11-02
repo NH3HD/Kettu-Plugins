@@ -11,15 +11,16 @@ export default function factory(r) {
     const engine = createEngine(store, id => B.assets.findAsset(id));
     let rendererCount = 0;
     const styles = {
-        card: { padding: 14, gap: 10, borderRadius: 14, backgroundColor: '#20232e', marginBottom: 10 },
-        text: { color: '#f4f4fa', fontSize: 15 },
-        muted: { color: '#b5b8ca', fontSize: 13 },
-        input: { color: '#f4f4fa', backgroundColor: '#12151e', padding: 12, borderRadius: 10, minHeight: 44 },
-        button: { padding: 12, minHeight: 44, borderRadius: 10, backgroundColor: '#514bd1', alignItems: 'center' },
+        card: { padding: 14, gap: 10, borderRadius: 16, backgroundColor: '#1E1F22', borderWidth: 1, borderColor: '#2B2D31', marginBottom: 22, overflow: 'hidden' },
+        text: { color: '#F2F3F5', fontSize: 16, lineHeight: 21, fontWeight: '600' },
+        muted: { color: '#B5BAC1', fontSize: 13, lineHeight: 18 },
+        label: { color: '#B5BAC1', fontSize: 13, lineHeight: 18, fontWeight: '600', marginLeft: 4, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+        input: { minHeight: 50, color: '#F2F3F5', fontSize: 16, lineHeight: 21, backgroundColor: '#151619', borderRadius: 12, borderWidth: 1, borderColor: '#2B2D31', paddingHorizontal: 14, paddingVertical: 12 },
+        button: { height: 48, borderRadius: 12, backgroundColor: '#5865F2', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
     };
-    const Text = ({ children, muted, ...props }) => h(RN.Text, { style: muted ? styles.muted : styles.text, ...props }, children);
-    const Button = ({ text, onPress, red, disabled }) => h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: text, accessibilityState: { disabled: !!disabled }, disabled, onPress, style: [styles.button, red && { backgroundColor: '#b42335' }, disabled && { opacity: 0.5 }] }, h(Text, null, text));
-    const Input = ({ value, onChange, placeholder, label }) => h(RN.TextInput, { value, onChangeText: onChange, placeholder, accessibilityLabel: label || placeholder, placeholderTextColor: '#858ba2', autoCapitalize: 'none', autoCorrect: false, style: styles.input });
+    const Text = ({ children, muted, style, ...props }) => h(RN.Text, { ...props, style: [muted ? styles.muted : styles.text, style] }, children);
+    const Button = ({ text, onPress, red, disabled }) => h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: text, accessibilityState: { disabled: !!disabled }, disabled, onPress, style: [styles.button, red && { backgroundColor: '#F23F43' }, disabled && { opacity: 0.5 }] }, h(RN.Text, { style: { color: '#FFFFFF', fontSize: 16, lineHeight: 20, fontWeight: '700' } }, text));
+    const Input = ({ value, onChange, placeholder, label }) => h(RN.TextInput, { value, onChangeText: onChange, placeholder, accessibilityLabel: label || placeholder, placeholderTextColor: '#6D6F78', autoCapitalize: 'none', autoCorrect: false, selectionColor: '#5865F2', style: styles.input });
 
     let hits = 0, applied = 0;
     const matched = new Map(), overridden = new Map();
@@ -146,21 +147,22 @@ export default function factory(r) {
         const [draft, setDraft] = React.useState(store.defaultColor || ''), [error, setError] = React.useState('');
         const names = [...new Set([...sdkIcons, ...iconNames, ...Object.keys(store.colors || {}), ...Object.keys(store.customIcons || {})])].sort().filter(name => name.toLowerCase().includes(search.toLowerCase()));
         const currentPage = Math.min(page, Math.max(0, Math.ceil(names.length / 12) - 1));
-        return h(RN.ScrollView, { contentContainerStyle: { padding: 16, gap: 12 }, keyboardShouldPersistTaps: 'handled' },
+        return h(RN.ScrollView, { style: { flex: 1, backgroundColor: '#111214' }, contentContainerStyle: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 36 }, keyboardShouldPersistTaps: 'handled' },
+            h(Text, { accessibilityRole: 'header', style: styles.label }, 'Custom icons'),
             h(RN.View, { style: styles.card },
-                h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' } },
-                    h(Text, null, 'custom icons'),
-                    h(RN.Switch, { accessibilityLabel: 'custom icons', value: !!store.customEnabled, onValueChange: value => {
+                h(RN.View, { style: { minHeight: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 } },
+                    h(Text, null, 'Custom icons'),
+                    h(RN.Switch, { accessibilityLabel: 'custom icons', value: !!store.customEnabled, trackColor: { false: '#3F4147', true: '#5865F2' }, thumbColor: '#FFFFFF', ios_backgroundColor: '#3F4147', onValueChange: value => {
                         if (!value) r.set('customEnabled', false);
                         else { try { showWarning(); } catch (e) { r.error('Custom icon warning', e); } }
                     } })),
                 h(Text, { muted: true }, 'Advanced · replace individual icons with your own images')),
             store.customEnabled ? h(CustomEditor) : null,
-            h(Text, { accessibilityRole: 'header', style: [styles.text, { fontSize: 24, fontWeight: '700' }] }, 'icon themer'),
+            h(Text, { accessibilityRole: 'header', style: styles.label }, 'Icon themer'),
             h(Text, { muted: true }, 'Named icon overrides use Snow’s JSX hook API. Reopen a screen if it kept an older icon. Legacy bitmap images and render paths outside these hooks are unchanged. Missing or failed pack images use the original icon.'),
             h(Text, { muted: true }, rendererCount ? `${rendererCount} documented icon hooks · ${hits} matches observed · ${applied} overrides applied · ${engine.failed.size} failed image(s)` : 'Icon hooks are unavailable. Overrides are not active.'),
             h(Text, { muted: true }, `resolution per matched name (first 10): ${[...resolutions.entries()].map(([n, r]) => `${n}=${r}`).join(' , ') || 'none'}`),
-            h(Text, { accessibilityRole: 'header' }, 'Preset icon packs'),
+            h(Text, { accessibilityRole: 'header', style: styles.label }, 'Preset icon packs'),
             h(Button, { text: `${!store.pack ? '✓ ' : ''}Original / theme icons`, onPress: () => { engine.retry(); r.set('pack', ''); } }),
             ...packs.map(pack => h(RN.View, { key: pack.id, style: styles.card },
                 h(Button, { text: `${store.pack === pack.id ? '✓ ' : ''}${pack.name}`, onPress: () => { engine.retry(); r.set('pack', pack.id); } }),
@@ -171,13 +173,13 @@ export default function factory(r) {
                 h(Text, { muted: true }, `${pack.count} asset replacements · merged duplicate folders`),
                 h(Button, { text: `${pack.name} source / credits`, onPress: () => RN.Linking.openURL(pack.groups[0].source) }))),
             h(RN.View, { style: styles.card },
-                h(Text, { accessibilityRole: 'header' }, 'Default icon color'),
+                h(Text, { accessibilityRole: 'header', style: styles.label }, 'Default icon color'),
                 h(Text, { muted: true }, 'Blank keeps pack artwork colors. A color here overrides theme tints; individual icon colors take priority. With Original / theme icons selected, blank leaves theme colors alone.'),
                 h(Input, { value: draft, onChange: setDraft, placeholder: '#RRGGBB or blank', label: 'Default icon color' }),
                 error ? h(Text, null, error) : null,
                 h(Button, { text: 'Save default color', onPress: async () => { try { await saveSetting('defaultColor', colorValue(draft)); setError(''); } catch (e) { setError(e.message); } } }),
                 h(Button, { text: 'Retry failed images', onPress: () => { engine.retry(); r.changed(); } })),
-            h(Text, { accessibilityRole: 'header' }, 'Individual icon colors'),
+            h(Text, { accessibilityRole: 'header', style: styles.label }, 'Individual icon colors'),
             h(Input, { value: search, onChange: value => { setSearch(value); setPage(0); }, placeholder: 'Search icons, e.g. Settings or Search', label: 'Search individual icons' }),
             h(Text, { muted: true }, `${names.length} icons · page ${currentPage + 1} of ${Math.max(1, Math.ceil(names.length / 12))}`),
             ...names.slice(currentPage * 12, currentPage * 12 + 12).map(name => h(ColorEditor, { key: name, name })),

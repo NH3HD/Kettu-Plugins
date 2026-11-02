@@ -372,22 +372,27 @@ function SettingsComponent() {
     r.useRefresh();
     var React = getReact();
     if (!React) return null;
+    var RN = getRN() || {};
+    var View = RN.View, Text = RN.Text, Switch = RN.Switch, ScrollView = RN.ScrollView;
+    if (!View || !Text || !Switch) return null;
     var store = getStorage();
-    var comps = (getMod().metro && getMod().metro.common && getMod().metro.common.components) || {};
-    var TableSwitchRow = comps.TableSwitchRow;
-    var TableRowGroup = comps.TableRowGroup;
-    var [, bump] = React.useState(0);
-    var row = TableSwitchRow
-        ? React.createElement(TableSwitchRow, {
-            label: "Show line numbers",
-            value: !!store.show_line_num,
-            onValueChange: function (v) { r.set('show_line_num', v); bump(function (n) { return n + 1; }); }
-        })
-        : null;
-    if (TableRowGroup) return React.createElement(TableRowGroup, { title: "HighlightCode" }, row);
-    var RN = getRN();
-    if (RN && RN.View) return React.createElement(RN.View, { style: { padding: 12 } }, row);
-    return row;
+    var colors = { background: "#111214", surface: "#1E1F22", border: "#2B2D31", text: "#F2F3F5", muted: "#B5BAC1", accent: "#5865F2" };
+    var body = React.createElement(View, null,
+        React.createElement(Text, { style: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: "600", marginLeft: 4, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 } }, "Highlighting"),
+        React.createElement(View, { style: { minHeight: 72, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border } },
+            React.createElement(View, { style: { flex: 1 } },
+                React.createElement(Text, { style: { color: colors.text, fontSize: 16, lineHeight: 21, fontWeight: "600", marginBottom: 3 } }, "Show line numbers"),
+                React.createElement(Text, { style: { color: colors.muted, fontSize: 14, lineHeight: 19 } }, "Number each line in supported code blocks")),
+            React.createElement(Switch, {
+                accessibilityLabel: "Show line numbers",
+                value: !!store.show_line_num,
+                onValueChange: function (v) { r.set("show_line_num", v); },
+                trackColor: { false: "#3F4147", true: colors.accent },
+                thumbColor: "#FFFFFF",
+                ios_backgroundColor: "#3F4147"
+            })));
+    if (ScrollView) return React.createElement(ScrollView, { style: { flex: 1, backgroundColor: colors.background }, contentContainerStyle: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 36 } }, body);
+    return body;
 }
 
 

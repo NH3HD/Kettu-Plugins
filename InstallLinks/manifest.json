@@ -2,7 +2,7 @@
   "spec": 3,
   "type": "plugin",
   "id": "mime.installlinks",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "display": {
     "name": "InstallLinks",
     "description": "Share snow:// links and copy manifest URLs for manual installation.",

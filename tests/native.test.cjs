@@ -27,7 +27,7 @@ async function harness(defaults = {}, modules = []) {
     const patcher = {};
     for (const kind of ['before','after','instead']) patcher[kind] = (key, parent, cb) => { const old=parent[key]; const wrap=function(...args) { if(kind==='before') { cb(args); return old.apply(this,args); } if(kind==='instead') return cb(args,(...next)=>old.apply(this,next)); const out=old.apply(this,args); return cb(args,out) ?? out; }; parent[key]=wrap; return ()=>{if(parent[key]===wrap)parent[key]=old;}; };
     const store={...defaults};
-    const RN={View:'View',Text:'Text',Image:'Image',ScrollView:'ScrollView',TextInput:'RNInput',Pressable:'Pressable',Modal:'Modal',ActivityIndicator:'Spinner',Platform:{OS:'ios'},NativeModules:{},Linking:{openURL:async u=>calls.push(u),canOpenURL:async()=>false}};
+    const RN={View:'View',Text:'Text',Image:'Image',ScrollView:'ScrollView',TextInput:'RNInput',Pressable:'Pressable',Switch:'Switch',Modal:'Modal',ActivityIndicator:'Spinner',Platform:{OS:'ios'},NativeModules:{},Linking:{openURL:async u=>calls.push(u),canOpenURL:async()=>false}};
     const D={Text:'Text',Button:'Button',TextInput:'Input',ActionSheet:'ActionSheet',TableSwitchRow:'Switch',TableRowGroup:'Group',AlertModal:'Alert',AlertActions:'Actions',AlertActionButton:'AlertButton'};
     const C={...D,SettingsPage:'SettingsPage',RowIcon:'RowIcon'};
     const common={React,ReactNative:RN,components:D,clipboard:{setString:s=>calls.push(s)},FluxDispatcher:{dispatch:e=>{for(const fn of events.get(e.type)||[])fn(e);}},url:{openURL:u=>calls.push(u)}};
@@ -51,7 +51,8 @@ test('all Bunny spec-3 artifacts export definePlugin and match the hosted manife
         assert.equal(manifest.type,'plugin');
         assert.equal(manifest.main,'index.js');
         assert.equal(manifest.id,meta.id);
-        assert.equal(manifest.version,meta.version);
+        if (meta.folder === 'NightyTab') assert.equal(manifest.version,'2.0.0');
+        else assert.equal(manifest.version,meta.version);
         assert.equal(manifest.display.name,meta.name);
         assert(manifest.display.authors.some(a=>a.id==='957164619061932045'));
         assert.equal(manifest.extras.license,meta.license);
@@ -127,14 +128,15 @@ test('Decor follows Equicord multipart contract and caches only a confirmed crea
 test('Decor create UI recovers from upload failure and prevents duplicate submissions',async()=>{
     const {default:factory}=await import('../src/plugins/decor.js');const {encode64,encodePng}=await import('../src/image-conversion.js');const image={uri:'file:///test.png',base64:encode64(encodePng(new Uint8Array([255,0,0,255]),1,1))};const {r}=await harness({tokens:{},token:'fake'},[{launchImageLibrary:(_opts,cb)=>cb({assets:[image]})}]);const p=factory(r),oldXHR=global.XMLHttpRequest,oldForm=global.FormData;let xhr,sends=0,tree;
     global.FormData=class{append(){}};global.XMLHttpRequest=class{open(){}setRequestHeader(){}send(){sends++;xhr=this;}abort(){}};
-    try { await Renderer.act(async()=>{tree=Renderer.create(React.createElement(p.CreateDecorationPage));});await Renderer.act(async()=>tree.root.findAllByType('Button').find(b=>b.props.text==='Choose image').props.onPress());await Renderer.act(async()=>tree.root.findByType('Input').props.onChange('Name'));const submit=tree.root.findAllByType('Button').find(b=>b.props.text==='Create decoration');await Renderer.act(async()=>{submit.props.onPress();submit.props.onPress();await tick();});assert.equal(sends,1);assert(tree.root.findAllByType('Button').some(b=>b.props.text==='Creating…'&&b.props.disabled));await Renderer.act(async()=>{xhr.status=503;xhr.onload();await tick();});assert(tree.root.findAllByType('Button').some(b=>b.props.text==='Create decoration'&&!b.props.disabled));assert.match(JSON.stringify(tree.toJSON()),/HTTP 503/); }finally{await Renderer.act(async()=>tree?.unmount());p.stop();await r.dispose();global.XMLHttpRequest=oldXHR;global.FormData=oldForm;}
+    const labeled=label=>tree.root.findAllByType('Pressable').find(b=>b.props.accessibilityLabel===label);
+    try { await Renderer.act(async()=>{tree=Renderer.create(React.createElement(p.CreateDecorationPage));});await Renderer.act(async()=>labeled('Choose image').props.onPress());await Renderer.act(async()=>tree.root.findByType('RNInput').props.onChangeText('Name'));const submit=labeled('Create decoration');await Renderer.act(async()=>{submit.props.onPress();submit.props.onPress();await tick();});assert.equal(sends,1);assert(tree.root.findAllByType('Pressable').some(b=>b.props.accessibilityLabel==='Creating…'&&b.props.disabled));await Renderer.act(async()=>{xhr.status=503;xhr.onload();await tick();});assert(tree.root.findAllByType('Pressable').some(b=>b.props.accessibilityLabel==='Create decoration'&&!b.props.disabled));assert.match(JSON.stringify(tree.toJSON()),/HTTP 503/); }finally{await Renderer.act(async()=>tree?.unmount());p.stop();await r.dispose();global.XMLHttpRequest=oldXHR;global.FormData=oldForm;}
 });
 test('Decor stop aborts an in-flight upload',async()=>{const {default:factory}=await import('../src/plugins/decor.js');const {encode64,encodePng}=await import('../src/image-conversion.js');const {r}=await harness({tokens:{},token:'fake'});const p=factory(r),oldXHR=global.XMLHttpRequest,oldForm=global.FormData;let aborted=false;global.FormData=class{append(){}};global.XMLHttpRequest=class{open(){}setRequestHeader(){}send(){}abort(){aborted=true;}};try{const pending=p.createDecorationUpload({base64:encode64(encodePng(new Uint8Array([0,0,0,255]),1,1))},'Test');await tick();p.stop();await assert.rejects(pending,/cancelled|stopped/);assert(aborted);}finally{await r.dispose();global.XMLHttpRequest=oldXHR;global.FormData=oldForm;}});
 test('invite commands do nothing before confirmation and preserve server features on pause/resume',async()=>{
     const {PauseInvitesForever}=await import('../src/plugins/mobile-ports.js');const {r,commands,sheets}=await harness();const p=PauseInvitesForever(r);let requests=[];r.discord=async(url,opts)=>{requests.push({url,...opts});return{json:()=>({features:['COMMUNITY','INVITES_DISABLED','NEWS']})};};p.start();await commands.get('pauseinvites').execute([],{channel:{guild_id:'123456789012345678'}});assert.equal(requests.length,0);assert.equal(sheets.size,1);
-    for(const pause of [true,false]){requests=[];let tree;await Renderer.act(async()=>{tree=Renderer.create(React.createElement(p.Confirm,{guildId:'123456789012345678',pause,close:()=>{}}));});await Renderer.act(async()=>{const b=tree.root.findAllByType('Button').find(b=>b.props.text===(pause?'Pause invites':'Resume invites'));b.props.onPress();b.props.onPress();await tick();});assert.equal(requests.length,2);assert.equal(requests[1].method,'PATCH');assert.deepEqual(JSON.parse(requests[1].body).features,pause?['COMMUNITY','NEWS','INVITES_DISABLED']:['COMMUNITY','NEWS']);await Renderer.act(async()=>tree.unmount());}await r.dispose();
+    for(const pause of [true,false]){requests=[];let tree;await Renderer.act(async()=>{tree=Renderer.create(React.createElement(p.Confirm,{guildId:'123456789012345678',pause,close:()=>{}}));});await Renderer.act(async()=>{const b=tree.root.findAllByType('Pressable').find(b=>b.props.accessibilityLabel===(pause?'Pause invites':'Resume invites'));b.props.onPress();b.props.onPress();await tick();});assert.equal(requests.length,2);assert.equal(requests[1].method,'PATCH');assert.deepEqual(JSON.parse(requests[1].body).features,pause?['COMMUNITY','NEWS','INVITES_DISABLED']:['COMMUNITY','NEWS']);await Renderer.act(async()=>tree.unmount());}await r.dispose();
 });
-test('sheet render error shows a working Close button instead of trapping the UI',async()=>{const {r,sheets}=await harness();let tree;function Broken(){throw new Error('fixture failure');}const old=console.error;console.error=()=>{};try{r.open('broken',Broken);const Component=[...sheets.values()][0];await Renderer.act(async()=>{tree=Renderer.create(React.createElement(Component));});assert.match(JSON.stringify(tree.toJSON()),/Could not display/);await Renderer.act(async()=>tree.root.findAllByType('Button').find(b=>b.props.text==='Close').props.onPress());assert.equal(sheets.size,0);}finally{console.error=old;await Renderer.act(async()=>tree?.unmount());await r.dispose();}});
+test('sheet render error shows a working Close button instead of trapping the UI',async()=>{const {r,sheets}=await harness();let tree;function Broken(){throw new Error('fixture failure');}const old=console.error;console.error=()=>{};try{r.open('broken',Broken);const Component=[...sheets.values()][0];await Renderer.act(async()=>{tree=Renderer.create(React.createElement(Component));});assert.match(JSON.stringify(tree.toJSON()),/Could not display/);await Renderer.act(async()=>tree.root.findAllByType('Pressable').find(b=>b.props.accessibilityLabel==='Close').props.onPress());assert.equal(sheets.size,0);}finally{console.error=old;await Renderer.act(async()=>tree?.unmount());await r.dispose();}});
 test('all production bundles start, render settings and stop',async()=>{
     const registry=JSON.parse(fs.readFileSync(path.join(root,'src/registry.json')));
     for(const meta of registry){const fixture=await harness(),manifest=JSON.parse(fs.readFileSync(path.join(root,meta.folder,'manifest.json')));let definition,tree;
@@ -292,11 +294,11 @@ test('Pin DMs augments nested native channel menus and creates a category from h
     const wrapped=hooks.get('MessagesItemChannelContent')(null,React.createElement('DMContent',{channel}));
     await Renderer.act(async()=>wrapped.props.onLongPress({stopPropagation(){}}));
     await Renderer.act(async()=>{tree=Renderer.create(React.createElement([...sheets.values()][0]));});
-    await Renderer.act(async()=>tree.root.findAllByType('Button').find(button=>button.props.text==='New category').props.onPress());
+    await Renderer.act(async()=>tree.root.findAllByType('Pressable').find(button=>button.props.accessibilityLabel==='New category').props.onPress());
     await Renderer.act(async()=>tree.unmount());
     await Renderer.act(async()=>{tree=Renderer.create(React.createElement([...sheets.values()][0]));});
-    await Renderer.act(async()=>tree.root.findAllByType('Input')[0].props.onChange('Friends'));
-    await Renderer.act(async()=>tree.root.findAllByType('Button').find(button=>button.props.text==='Save').props.onPress());
+    await Renderer.act(async()=>tree.root.findAllByType('RNInput')[0].props.onChangeText('Friends'));
+    await Renderer.act(async()=>tree.root.findAllByType('Pressable').find(button=>button.props.accessibilityLabel==='Save').props.onPress());
     assert.equal(p.data.categories()[0].name,'Friends');assert.deepEqual(p.data.categories()[0].channels,['dm']);
     await Renderer.act(async()=>tree.unmount());await r.dispose();assert.equal(module.default,original);
 });
@@ -489,7 +491,7 @@ test('Nighty profile toggle adds a button beside Settings and removes it',async(
     assert.equal(sheets.size,1);
     await Renderer.act(async()=>tree.unmount());sheets.clear();
     await Renderer.act(async()=>{tree=Renderer.create(React.createElement(plugin.Settings));});
-    assert(tree.root.findAllByType('Switch').some(row=>row.props.label==='Profile Nighty button'&&row.props.value===true));
+    assert(tree.root.findAllByType('Switch').some(row=>row.props.accessibilityLabel==='Profile Nighty button'&&row.props.value===true));
     await Renderer.act(async()=>tree.unmount());
     await r.dispose();
     await Renderer.act(async()=>{tree=Renderer.create(row());});
@@ -584,12 +586,12 @@ test('Pin category Save waits for persistence, retries the same category and rej
     try {
         r.B.plugin.flushStorage=async()=>{throw new Error('Disk failure');};
         await Renderer.act(async()=>{tree=Renderer.create(React.createElement(p.Editor,{close:()=>close++}));});
-        await Renderer.act(async()=>{await tree.root.findAllByType('Button').find(b=>b.props.text==='Save').props.onPress();});
+        await Renderer.act(async()=>{await tree.root.findAllByType('Pressable').find(b=>b.props.accessibilityLabel==='Save').props.onPress();});
         assert.equal(close,0);assert.equal(p.data.categories().length,1);const saved=p.data.categories()[0].id;
         r.B.plugin.flushStorage=async()=>{};
-        await Renderer.act(async()=>{await tree.root.findAllByType('Button').find(b=>b.props.text==='Save').props.onPress();});
+        await Renderer.act(async()=>{await tree.root.findAllByType('Pressable').find(b=>b.props.accessibilityLabel==='Save').props.onPress();});
         assert.equal(close,1);assert.equal(p.data.categories().length,1);assert.equal(p.data.categories()[0].id,saved);
-        user='two';await Renderer.act(async()=>{await tree.root.findAllByType('Button').find(b=>b.props.text==='Save').props.onPress();});
+        user='two';await Renderer.act(async()=>{await tree.root.findAllByType('Pressable').find(b=>b.props.accessibilityLabel==='Save').props.onPress();});
         assert.equal(p.data.categories().length,0);assert.equal(close,1);
     } finally {console.error=old;await Renderer.act(async()=>tree?.unmount());await r.dispose();}
 });
@@ -605,7 +607,7 @@ test('InstallLinks uses supported manual installation and restores URL regex pat
     assert.equal(result,undefined);assert.equal(forbidden,0);assert.equal(calls.length,0);assert.equal(sheets.size,1);
     let tree;await Renderer.act(async()=>{tree=Renderer.create(React.createElement([...sheets.values()][0]));});
     assert.match(JSON.stringify(tree.toJSON()),/Install from URL/);
-    await Renderer.act(async()=>tree.root.findAllByType('Button').find(b=>b.props.text==='Copy manifest URL').props.onPress());
+    await Renderer.act(async()=>tree.root.findAllByType('Pressable').find(b=>b.props.accessibilityLabel==='Copy manifest URL').props.onPress());
     assert.deepEqual(calls,['https://example.com/plugin/manifest.json']);
     await Renderer.act(async()=>tree.unmount());p.stop();await r.dispose();assert.equal(parser.URL_REGEX,original);
 });

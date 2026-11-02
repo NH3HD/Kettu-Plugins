@@ -6835,50 +6835,132 @@ var plugin = (() => {
     return r;
   }
   function ui(r) {
-    const { h, C, D, RN, store } = r;
-    function Text({ children, muted = false, heading = false, color, ...props }) {
-      const Comp = D.Text || C.Text;
-      if (Comp) return h(Comp, { variant: heading ? "heading-md/semibold" : "text-md/normal", color: color || (muted ? "text-muted" : "text-normal"), ...props }, children);
-      return h(RN.Text, props, children);
+    const { h, RN, store } = r;
+    const colors = { background: "#111214", surface: "#1E1F22", surfacePressed: "#26272B", border: "#2B2D31", text: "#F2F3F5", muted: "#B5BAC1", accent: "#5865F2", danger: "#F23F43" };
+    const palette = { "text-danger": colors.danger, "text-warning": "#FEE75C", "text-muted": colors.muted, "text-normal": colors.text };
+    function Text({ children, muted = false, heading = false, color, style, ...props }) {
+        const resolved = palette[color] || (muted ? colors.muted : colors.text);
+        const base = heading
+            ? { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: "600", marginLeft: 4, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }
+            : { color: resolved, fontSize: muted ? 13 : 16, lineHeight: muted ? 18 : 21, fontWeight: muted ? "400" : "600" };
+        return h(RN.Text, { ...props, style: [base, style] }, children);
     }
     function Button({ text, onPress, disabled, variant = "primary", ...props }) {
-      const Comp = D.Button;
-      if (Comp) return h(Comp, { text, onPress, disabled, variant, size: "md", ...props });
-      return h(RN.Pressable || RN.TouchableOpacity, { onPress, disabled, accessibilityRole: "button", style: { padding: 12 } }, h(Text, null, text));
+        const primary = variant !== "secondary";
+        return h(RN.Pressable || RN.TouchableOpacity, {
+            ...props,
+            accessibilityRole: "button",
+            accessibilityLabel: text,
+            accessibilityState: { disabled: !!disabled },
+            disabled: !!disabled,
+            onPress,
+            style: ({ pressed } = {}) => ({
+                minHeight: 48,
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                backgroundColor: primary ? (pressed ? "#4752C4" : colors.accent) : (pressed ? colors.surfacePressed : colors.surface),
+                borderWidth: primary ? 0 : 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: disabled ? 0.5 : 1,
+            }),
+        }, h(RN.Text, { style: { color: primary ? "#FFFFFF" : colors.muted, fontSize: 16, lineHeight: 20, fontWeight: "700" } }, text));
+    }
+    function Input({ value, onChange, label, secureTextEntry, style, ...props }) {
+        const field = h(RN.TextInput, {
+            ...props,
+            value: value == null ? "" : String(value),
+            onChangeText: onChange,
+            secureTextEntry: !!secureTextEntry,
+            placeholderTextColor: "#6D6F78",
+            autoCorrect: false,
+            selectionColor: colors.accent,
+            style: [{ minHeight: 50, color: colors.text, fontSize: 16, lineHeight: 21, backgroundColor: "#151619", borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 12 }, style],
+        });
+        if (!label) return field;
+        return h(RN.View, { style: { gap: 8 } },
+            h(RN.Text, { style: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: "600", marginLeft: 4 } }, label),
+            field);
+    }
+    function Toggle({ setting, label, subLabel }) {
+        r.useRefresh();
+        return h(RN.View, { style: { minHeight: 72, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12 } },
+            h(RN.View, { style: { flex: 1 } },
+                h(RN.Text, { style: { color: colors.text, fontSize: 16, lineHeight: 21, fontWeight: "600", marginBottom: subLabel ? 3 : 0 } }, label),
+                subLabel ? h(RN.Text, { style: { color: colors.muted, fontSize: 14, lineHeight: 19 } }, subLabel) : null),
+            h(RN.Switch, {
+                accessibilityLabel: label,
+                value: !!store[setting],
+                onValueChange: value => r.set(setting, value),
+                trackColor: { false: "#3F4147", true: colors.accent },
+                thumbColor: "#FFFFFF",
+                ios_backgroundColor: "#3F4147",
+            }));
+    }
+    function Slider({ value, onValueChange, ...props }) {
+        return h(Input, {
+            ...props,
+            value: String(value),
+            onChange: text => {
+                const next = Number(text);
+                onValueChange(Number.isFinite(next) ? next : 0);
+            },
+            keyboardType: "numeric",
+        });
+    }
+    function card(rows) {
+        return h(RN.View, { style: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, overflow: "hidden" } }, ...rows);
     }
     function Page({ title, children, close }) {
-      const body = [
-        title ? h(Text, { key: "title", heading: true, accessibilityRole: "header" }, title) : null,
-        children,
-        close ? h(Button, { key: "close", text: "Close", variant: "secondary", onPress: close }) : null
-      ];
-      if (C.SettingsPage) return h(C.SettingsPage, null, ...body);
-      return h(RN.View, { style: { padding: 16, gap: 12 } }, ...body);
-    }
-    function Input({ value, onChange, ...props }) {
-      if (D.TextInput) return h(D.TextInput, { value, onChange, ...props });
-      if (C.TextInput) return h(C.TextInput, { value, onChange, ...props });
-      return h(RN.TextInput, { value, onChangeText: onChange, ...props });
-    }
-    function Toggle({ setting, label, subLabel, icon }) {
-      r.useRefresh();
-      const Row = D.TableSwitchRow || C.TableSwitchRow;
-      if (!Row) return null;
-      return h(Row, {
-        label,
-        subLabel,
-        icon: icon || (C.RowIcon ? h(C.RowIcon, { name: "SettingsIcon" }) : void 0),
-        value: !!store[setting],
-        onValueChange: (v) => r.set(setting, v)
-      });
-    }
-    function Slider({ value, onValueChange, minimumValue = 0, maximumValue = 1, step, ...props }) {
-      const Comp = D.Slider || C.Slider;
-      if (Comp) return h(Comp, { value, onValueChange, minimumValue, maximumValue, step, ...props });
-      return h(Input, { value: String(value), onChange: (text) => onValueChange(Number(text) || 0), keyboardType: "numeric" });
+        const items = [];
+        const walk = value => {
+            if (value == null || value === false) return;
+            if (Array.isArray(value)) { value.forEach(walk); return; }
+            items.push(value);
+        };
+        walk(children);
+        const blocks = [];
+        let toggles = [];
+        const flush = () => {
+            if (!toggles.length) return;
+            const rows = [];
+            toggles.forEach((node, index) => {
+                if (index) rows.push(h(RN.View, { key: "divider-" + index, style: { height: 1, backgroundColor: colors.border, marginLeft: 16 } }));
+                rows.push(node);
+            });
+            blocks.push(card(rows));
+            toggles = [];
+        };
+        for (const child of items) {
+            if (child.type === Toggle) { toggles.push(child); continue; }
+            flush();
+            if (child.type === Input) {
+                blocks.push(card([h(RN.View, { key: "field", style: { padding: 14 } }, child)]));
+                continue;
+            }
+            blocks.push(child);
+        }
+        flush();
+        const body = [];
+        if (title) body.push(h(RN.Text, { key: "title", accessibilityRole: "header", style: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: "600", marginLeft: 4, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 } }, title));
+        blocks.forEach((block, index) => {
+            if (body.length && !(title && index === 0)) body.push(h(RN.View, { key: "gap-" + index, style: { height: 22 } }));
+            body.push(block);
+        });
+        if (close) {
+            if (body.length) body.push(h(RN.View, { key: "gap-close", style: { height: 22 } }));
+            body.push(h(Button, { key: "close", text: "Close", variant: "secondary", onPress: close }));
+        }
+        return h(RN.ScrollView, {
+            style: { flex: 1, backgroundColor: colors.background },
+            contentContainerStyle: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 36 },
+            keyboardShouldPersistTaps: "handled",
+            showsVerticalScrollIndicator: false,
+        }, ...body);
     }
     return { Text, Button, Page, Input, Toggle, Slider };
-  }
+}
   function register(meta, factory) {
     const B = bunny;
     let runtime;
@@ -9191,9 +9273,8 @@ var plugin = (() => {
       var View = RN.View;
       var Text = RN.Text;
       var ScrollView = RN.ScrollView;
-      var comps = getMod().metro && getMod().metro.common && getMod().metro.common.components || {};
-      var Button = comps.Button;
-      var TextInput = comps.TextInput;
+      var Pressable = RN.Pressable || RN.TouchableOpacity;
+      var TextInput = RN.TextInput;
       var [, bump] = React.useState(0);
       React.useEffect(function() {
         loadPresets().then(function() {
@@ -9213,56 +9294,46 @@ var plugin = (() => {
         });
       }
       var authorized = !!getToken();
+      var colors = { background: "#111214", surface: "#1E1F22", border: "#2B2D31", text: "#F2F3F5", muted: "#B5BAC1", accent: "#5865F2" };
+      function action(label, onPress, primary) {
+        return h(Pressable, {
+          accessibilityRole: "button",
+          accessibilityLabel: label,
+          onPress,
+          style: { height: 48, borderRadius: 12, backgroundColor: primary ? colors.accent : colors.surface, borderWidth: primary ? 0 : 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }
+        }, h(Text, { style: { color: primary ? "#FFFFFF" : colors.muted, fontSize: 16, lineHeight: 20, fontWeight: "700" } }, label));
+      }
       var children = [];
       children.push(h(DecorationPicker, { key: "picker" }));
-      if (Text) {
-        children.push(h(Text, {
-          key: "status",
-          style: { color: themeColors().text, marginTop: 16, marginBottom: 8, paddingHorizontal: 12 }
-        }, authorized ? "Authorized with Decor." : "Authorize to equip decorations. Uses your Discord login."));
-      }
-      if (Button) {
-        children.push(h(View, { key: "authwrap", style: { paddingHorizontal: 12, marginTop: 8, marginBottom: 8 } }, h(Button, {
-          text: authorized ? "Re-authorize" : "Authorize with Decor",
-          onPress: function() {
-            authorize().then(() => {
-              if (!stopped && r.active) refresh();
-            });
-            schedule(refresh, 2e3);
-          }
-        })));
-        if (authorized) {
-          children.push(h(View, { key: "logoutwrap", style: { paddingHorizontal: 12, marginBottom: 8 } }, h(Button, {
-            text: "Log out",
-            onPress: function() {
-              setToken(null);
-              refresh();
-            }
-          })));
-        }
-        children.push(h(View, { key: "reloadwrap", style: { paddingHorizontal: 12, marginBottom: 8 } }, h(Button, {
-          text: "Reload list",
-          onPress: function() {
-            refreshMine().then(refresh);
-          }
-        })));
-      }
-      if (TextInput) {
-        children.push(h(TextInput, {
-          key: "paste",
-          label: "Token fallback (only if authorize fails)",
+      if (View && Text && Pressable) {
+        children.push(h(Text, { key: "account", style: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: "600", marginLeft: 4, marginTop: 22, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 } }, "Account"));
+        children.push(h(View, { key: "accountcard", style: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 10 } }, h(Text, { style: { color: colors.muted, fontSize: 13, lineHeight: 18 } }, authorized ? "Authorized with Decor." : "Authorize to equip decorations. Uses your Discord login."), action(authorized ? "Re-authorize" : "Authorize with Decor", function() {
+          authorize().then(() => {
+            if (!stopped && r.active) refresh();
+          });
+          schedule(refresh, 2e3);
+        }, true), authorized ? action("Log out", function() {
+          setToken(null);
+          refresh();
+        }, false) : null, action("Reload list", function() {
+          refreshMine().then(refresh);
+        }, false), TextInput ? h(TextInput, {
+          accessibilityLabel: "Token fallback",
+          placeholder: "Token fallback (only if authorize fails)",
+          placeholderTextColor: "#6D6F78",
           value: getToken() || "",
           secureTextEntry: true,
           autoCapitalize: "none",
-          onChange: function(v) {
+          autoCorrect: false,
+          onChangeText: function(v) {
             setToken(v);
             refresh();
-          }
-        }));
+          },
+          style: { minHeight: 50, color: colors.text, fontSize: 16, backgroundColor: "#151619", borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 12 }
+        }) : null));
       }
-      var t = themeColors();
-      var inner = View ? h(View, { style: { paddingBottom: 40, backgroundColor: t.bg } }, children) : children[0];
-      if (ScrollView) return h(ScrollView, { style: { flex: 1, backgroundColor: t.bg } }, inner);
+      var inner = View ? h(View, { style: { paddingBottom: 40, backgroundColor: colors.background } }, children) : children[0];
+      if (ScrollView) return h(ScrollView, { style: { flex: 1, backgroundColor: colors.background }, contentContainerStyle: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 36 } }, inner);
       return inner;
     }
     return { start, stop, Settings: SettingsComponent, CreateDecorationPage, getCustomDecorations: () => myDecorations, createDecorationUpload, normalizePickedImage, decorationToAsset, getStorage };
@@ -9270,6 +9341,6 @@ var plugin = (() => {
   Decor.defaults = { tokens: {} };
 
   // Decor.entry.js
-  var Decor_entry_default = register({ "id": "mime.decor", "name": "Decor", "description": "Browse and equip Decor avatar decorations.", "version": "2.2.5", "authors": [{ "name": "Fiery", "id": "890228870559698955" }, { "name": "Mime | N0_.q3", "id": "957164619061932045" }], "license": "GPL-3.0-or-later", "source": "https://github.com/xMimiez/Snow-Plugins/tree/main/Decor" }, Decor);
+  var Decor_entry_default = register({ "id": "mime.decor", "name": "Decor", "description": "Browse and equip Decor avatar decorations.", "version": "2.2.6", "authors": [{ "name": "Fiery", "id": "890228870559698955" }, { "name": "Mime | N0_.q3", "id": "957164619061932045" }], "license": "GPL-3.0-or-later", "source": "https://github.com/xMimiez/Snow-Plugins/tree/main/Decor" }, Decor);
   return __toCommonJS(Decor_entry_exports);
 })();

@@ -2,7 +2,7 @@
   "spec": 3,
   "type": "plugin",
   "id": "mime.morecommands",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "display": {
     "name": "MoreCommands",
     "description": "Fun and utility slash commands, including /more-gifroulette.",

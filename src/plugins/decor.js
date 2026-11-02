@@ -2045,9 +2045,8 @@ function SettingsComponent() {
     var View = RN.View;
     var Text = RN.Text;
     var ScrollView = RN.ScrollView;
-    var comps = (getMod().metro && getMod().metro.common && getMod().metro.common.components) || {};
-    var Button = comps.Button;
-    var TextInput = comps.TextInput;
+    var Pressable = RN.Pressable || RN.TouchableOpacity;
+    var TextInput = RN.TextInput;
     var [, bump] = React.useState(0);
     React.useEffect(function () {
         loadPresets().then(function () { bump(function (n) { return n + 1; }); });
@@ -2055,41 +2054,39 @@ function SettingsComponent() {
     }, []);
     function refresh() { bump(function (n) { return n + 1; }); }
     var authorized = !!getToken();
+    var colors = { background: "#111214", surface: "#1E1F22", border: "#2B2D31", text: "#F2F3F5", muted: "#B5BAC1", accent: "#5865F2" };
+    function action(label, onPress, primary) {
+        return h(Pressable, {
+            accessibilityRole: "button",
+            accessibilityLabel: label,
+            onPress: onPress,
+            style: { height: 48, borderRadius: 12, backgroundColor: primary ? colors.accent : colors.surface, borderWidth: primary ? 0 : 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }
+        }, h(Text, { style: { color: primary ? "#FFFFFF" : colors.muted, fontSize: 16, lineHeight: 20, fontWeight: "700" } }, label));
+    }
     var children = [];
     children.push(h(DecorationPicker, { key: "picker" }));
-    if (Text) {
-        children.push(h(Text, {
-            key: "status",
-            style: { color: themeColors().text, marginTop: 16, marginBottom: 8, paddingHorizontal: 12 }
-        }, authorized ? "Authorized with Decor." : "Authorize to equip decorations. Uses your Discord login."));
+    if (View && Text && Pressable) {
+        children.push(h(Text, { key: "account", style: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: "600", marginLeft: 4, marginTop: 22, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 } }, "Account"));
+        children.push(h(View, { key: "accountcard", style: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 10 } },
+            h(Text, { style: { color: colors.muted, fontSize: 13, lineHeight: 18 } }, authorized ? "Authorized with Decor." : "Authorize to equip decorations. Uses your Discord login."),
+            action(authorized ? "Re-authorize" : "Authorize with Decor", function () { authorize().then(function () { if (!stopped && r.active) refresh(); }); schedule(refresh, 2000); }, true),
+            authorized ? action("Log out", function () { setToken(null); refresh(); }, false) : null,
+            action("Reload list", function () { refreshMine().then(refresh); }, false),
+            TextInput ? h(TextInput, {
+                accessibilityLabel: "Token fallback",
+                placeholder: "Token fallback (only if authorize fails)",
+                placeholderTextColor: "#6D6F78",
+                value: getToken() || "",
+                secureTextEntry: true,
+                autoCapitalize: "none",
+                autoCorrect: false,
+                onChangeText: function (v) { setToken(v); refresh(); },
+                style: { minHeight: 50, color: colors.text, fontSize: 16, backgroundColor: "#151619", borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 12 }
+            }) : null
+        ));
     }
-    if (Button) {
-        children.push(h(View, { key: "authwrap", style: { paddingHorizontal: 12, marginTop: 8, marginBottom: 8 } }, h(Button, {
-            text: authorized ? "Re-authorize" : "Authorize with Decor",
-            onPress: function () { authorize().then(() => { if (!stopped && r.active) refresh(); }); schedule(refresh, 2000); }
-        })));
-        if (authorized) {
-            children.push(h(View, { key: "logoutwrap", style: { paddingHorizontal: 12, marginBottom: 8 } }, h(Button, {
-                text: "Log out",
-                onPress: function () { setToken(null); refresh(); }
-            })));
-        }
-        children.push(h(View, { key: "reloadwrap", style: { paddingHorizontal: 12, marginBottom: 8 } }, h(Button, {
-            text: "Reload list",
-            onPress: function () { refreshMine().then(refresh); }
-        })));
-    }
-    if (TextInput) {
-        children.push(h(TextInput, {
-            key: "paste",
-            label: "Token fallback (only if authorize fails)",
-            value: getToken() || "", secureTextEntry: true, autoCapitalize: "none",
-            onChange: function (v) { setToken(v); refresh(); }
-        }));
-    }
-    var t = themeColors();
-    var inner = View ? h(View, { style: { paddingBottom: 40, backgroundColor: t.bg } }, children) : children[0];
-    if (ScrollView) return h(ScrollView, { style: { flex: 1, backgroundColor: t.bg } }, inner);
+    var inner = View ? h(View, { style: { paddingBottom: 40, backgroundColor: colors.background } }, children) : children[0];
+    if (ScrollView) return h(ScrollView, { style: { flex: 1, backgroundColor: colors.background }, contentContainerStyle: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 36 } }, inner);
     return inner;
 }
 
