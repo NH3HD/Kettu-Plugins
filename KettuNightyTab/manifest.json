@@ -1,0 +1,8 @@
+{
+  "name": "Nighty Tab",
+  "description": "Open Nighty from Discord mobile settings or the profile action bar.",
+  "authors": [{"name": "Mime | N0_.q3", "id": "957164619061932045"}, {"name": "rico | wkcp", "id": "1361736124858630274"}],
+  "main": "index.js",
+  "hash": "9e1401a397ce5f4ce78e47f336aa8e8cd528397a2d8ddeb8163c389a2755e6eb",
+  "vendetta": {"icon": "ic_settings_24px"}
+}
